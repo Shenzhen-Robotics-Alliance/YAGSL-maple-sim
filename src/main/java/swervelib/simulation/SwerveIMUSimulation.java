@@ -8,6 +8,9 @@ import edu.wpi.first.math.kinematics.SwerveDriveKinematics;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
 import edu.wpi.first.wpilibj.Timer;
 import edu.wpi.first.wpilibj.smartdashboard.Field2d;
+import org.ironmaple.simulation.SimulatedArena;
+import org.ironmaple.simulation.drivesims.GyroSimulation;
+
 import java.util.Optional;
 
 /**
@@ -16,27 +19,12 @@ import java.util.Optional;
 public class SwerveIMUSimulation
 {
 
-  /**
-   * Main timer to control movement estimations.
-   */
-  private final Timer  timer;
-  /**
-   * The last time the timer was read, used to determine position changes.
-   */
-  private       double lastTime;
-  /**
-   * Heading of the robot.
-   */
-  private       double angle;
+  private static GyroSimulation instance = null;
 
-  /**
-   * Create the swerve drive IMU simulation.
-   */
-  public SwerveIMUSimulation()
-  {
-    timer = new Timer();
-    timer.start();
-    lastTime = timer.get();
+  public static GyroSimulation getInstance() {
+    if (instance == null)
+      instance = GyroSimulation.createNav2X();
+    return instance;
   }
 
   /**
@@ -46,7 +34,7 @@ public class SwerveIMUSimulation
    */
   public Rotation2d getYaw()
   {
-    return new Rotation2d(angle);
+    return getInstance().getGyroReading();
   }
 
   /**
@@ -76,7 +64,7 @@ public class SwerveIMUSimulation
    */
   public Rotation3d getGyroRotation3d()
   {
-    return new Rotation3d(0, 0, angle);
+    return new Rotation3d(0, 0, getYaw().getRadians());
   }
 
   /**
@@ -104,9 +92,6 @@ public class SwerveIMUSimulation
       Pose2d[] modulePoses,
       Field2d field)
   {
-
-    angle += kinematics.toChassisSpeeds(states).omegaRadiansPerSecond * (timer.get() - lastTime);
-    lastTime = timer.get();
     field.getObject("XModules").setPoses(modulePoses);
   }
 
@@ -117,6 +102,6 @@ public class SwerveIMUSimulation
    */
   public void setAngle(double angle)
   {
-    this.angle = angle;
+    getInstance().setRotation(Rotation2d.fromRadians(angle));
   }
 }

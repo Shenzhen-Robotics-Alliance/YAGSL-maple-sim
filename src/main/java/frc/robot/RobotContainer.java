@@ -123,6 +123,11 @@ public class RobotContainer
       drivebase.setDefaultCommand(
         !RobotBase.isSimulation() ? driveFieldOrientedDirectAngle : driveFieldOrientedDirectAngleSim);
     }
+
+    if (Robot.isSimulation())
+      driverXbox.start().onTrue(Commands.runOnce(
+              () -> drivebase.resetOdometry(new Pose2d(3, 3, new Rotation2d()))
+      ));
   }
 
   /**

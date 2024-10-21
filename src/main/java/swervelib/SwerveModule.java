@@ -196,7 +196,7 @@ public class SwerveModule
 
     if (SwerveDriveTelemetry.isSimulation)
     {
-      simModule = new SwerveModuleSimulation();
+      simModule = new SwerveModuleSimulation(moduleNumber);
     }
 
     // Force a cache update on init.

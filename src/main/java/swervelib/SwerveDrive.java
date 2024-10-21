@@ -29,6 +29,8 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.concurrent.locks.Lock;
 import java.util.concurrent.locks.ReentrantLock;
+
+import org.ironmaple.simulation.SimulatedArena;
 import swervelib.encoders.CANCoderSwerve;
 import swervelib.imu.IMUVelocity;
 import swervelib.imu.Pigeon2Swerve;
@@ -39,6 +41,7 @@ import swervelib.parser.Cache;
 import swervelib.parser.SwerveControllerConfiguration;
 import swervelib.parser.SwerveDriveConfiguration;
 import swervelib.simulation.SwerveIMUSimulation;
+import swervelib.simulation.SwerveSimulationObjectsContainer;
 import swervelib.telemetry.Alert;
 import swervelib.telemetry.Alert.AlertType;
 import swervelib.telemetry.SwerveDriveTelemetry;
@@ -189,8 +192,14 @@ public class SwerveDrive
     // If the robot is real, instantiate the IMU instead.
     if (SwerveDriveTelemetry.isSimulation)
     {
+      SwerveSimulationObjectsContainer.feedConfigs(
+              config.physicalCharacteristics.conversionFactor.angle,
+              config.physicalCharacteristics.driveMotorCurrentLimit,
+              config.physicalCharacteristics.wheelGripCoefficientOfFriction
+      );
       simIMU = new SwerveIMUSimulation();
       imuReadingCache = new Cache<>(simIMU::getGyroRotation3d, 5L);
+      // feed the configs to maple-sim
     } else
     {
       imu = config.imu;
@@ -246,6 +255,8 @@ public class SwerveDrive
     }
 
     odometryThread.startPeriodic(SwerveDriveTelemetry.isSimulation ? 0.01 : 0.02);
+    if (SwerveDriveTelemetry.isSimulation)
+      SimulatedArena.overrideSimulationTimings(0.01, 3);
 
     checkIfTunerXCompatible();
   }
@@ -300,6 +311,8 @@ public class SwerveDrive
   {
     odometryThread.stop();
     odometryThread.startPeriodic(period);
+    if (SwerveDriveTelemetry.isSimulation)
+      SimulatedArena.overrideSimulationTimings(period, 1);
   }
 
   /**
@@ -699,6 +712,8 @@ public class SwerveDrive
   {
     odometryLock.lock();
     swerveDrivePoseEstimator.resetPosition(getYaw(), getModulePositions(), pose);
+    if (SwerveDriveTelemetry.isSimulation)
+      SwerveSimulationObjectsContainer.getInstance().setSimulationWorldPose(pose);
     odometryLock.unlock();
     kinematics.toSwerveModuleStates(ChassisSpeeds.fromFieldRelativeSpeeds(0, 0, 0, getYaw()));
   }
@@ -1001,6 +1016,7 @@ public class SwerveDrive
         Pose2d[] modulePoses = getSwerveModulePoses(swerveDrivePoseEstimator.getEstimatedPosition());
         if (SwerveDriveTelemetry.isSimulation)
         {
+          SimulatedArena.getInstance().simulationPeriodic();
           simIMU.updateOdometry(
               kinematics,
               getStates(),
@@ -1015,7 +1031,12 @@ public class SwerveDrive
         SwerveDriveTelemetry.robotRotation = getOdometryHeading().getDegrees();
       }
 
-      if (SwerveDriveTelemetry.verbosity.ordinal() >= TelemetryVerbosity.POSE.ordinal())
+      if (SwerveDriveTelemetry.isSimulation)
+      {
+        field.setRobotPose(SwerveSimulationObjectsContainer.getInstance().getSimulatedDriveTrainPose());
+        field.getObject("OdometryPose").setPose(swerveDrivePoseEstimator.getEstimatedPosition());
+      }
+      else if (SwerveDriveTelemetry.verbosity.ordinal() >= TelemetryVerbosity.POSE.ordinal())
       {
         field.setRobotPose(swerveDrivePoseEstimator.getEstimatedPosition());
       }

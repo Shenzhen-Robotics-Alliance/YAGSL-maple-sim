@@ -1,54 +1,22 @@
 package swervelib.simulation;
 
-import edu.wpi.first.math.geometry.Rotation2d;
+import edu.wpi.first.math.controller.PIDController;
 import edu.wpi.first.math.kinematics.SwerveModulePosition;
 import edu.wpi.first.math.kinematics.SwerveModuleState;
-import edu.wpi.first.wpilibj.Timer;
+import static swervelib.simulation.SwerveSimulationObjectsContainer.*;
 
 /**
  * Class to hold simulation data for {@link swervelib.SwerveModule}
  */
 public class SwerveModuleSimulation
 {
+  private final PIDController steerCloseLoop = new PIDController(3, 0, 0);
 
-
-  /**
-   * Main timer to simulate the passage of time.
-   */
-  private final Timer             timer;
-  /**
-   * Time delta since last update
-   */
-  private       double            dt;
-  /**
-   * Fake motor position.
-   */
-  private       double            fakePos;
-  /**
-   * The fake speed of the previous state, used to calculate {@link SwerveModuleSimulation#fakePos}.
-   */
-  private       double            fakeSpeed;
-  /**
-   * Last time queried.
-   */
-  private       double            lastTime;
-  /**
-   * Current simulated swerve module state.
-   */
-  private       SwerveModuleState state;
-
-  /**
-   * Create simulation class and initialize module at 0.
-   */
-  public SwerveModuleSimulation()
+  private final org.ironmaple.simulation.drivesims.SwerveModuleSimulation simulation;
+  public SwerveModuleSimulation(int number)
   {
-    timer = new Timer();
-    timer.start();
-    lastTime = timer.get();
-    state = new SwerveModuleState(0, Rotation2d.fromDegrees(0));
-    fakeSpeed = 0;
-    fakePos = 0;
-    dt = 0;
+    this.simulation = SwerveSimulationObjectsContainer.getInstance().getModules()[number];
+    steerCloseLoop.enableContinuousInput(-Math.PI, Math.PI);
   }
 
   /**
@@ -59,13 +27,22 @@ public class SwerveModuleSimulation
    */
   public void updateStateAndPosition(SwerveModuleState desiredState)
   {
-    dt = timer.get() - lastTime;
-    lastTime = timer.get();
+    final SwerveModuleState desiredStateOptimized = SwerveModuleState.optimize(
+            desiredState,
+            simulation.getSteerAbsoluteFacing()
+    );
+    final double velocityMPSProjected = desiredState.speedMetersPerSecond * desiredState.angle.minus(getState().angle).getCos(),
+            driveMotorDesiredSpeedRadPerSec = velocityMPSProjected / WHEEL_RADIUS_METERS * DRIVE_GEAR_RATIO,
+            driveVoltage = DRIVE_MOTOR.getVoltage(
+                    0,
+                    driveMotorDesiredSpeedRadPerSec
+            );
 
-    state = desiredState;
-    fakeSpeed = desiredState.speedMetersPerSecond;
-    fakePos += (fakeSpeed * dt);
-
+    simulation.requestDriveVoltageOut(driveVoltage);
+    simulation.requestSteerVoltageOut(steerCloseLoop.calculate(
+            simulation.getSteerAbsoluteFacing().getRadians(),
+            desiredStateOptimized.angle.getRadians()
+    ));
   }
 
   /**
@@ -76,7 +53,10 @@ public class SwerveModuleSimulation
   public SwerveModulePosition getPosition()
   {
 
-    return new SwerveModulePosition(fakePos, state.angle);
+    return new SwerveModulePosition(
+            simulation.getDriveWheelFinalPositionRad() * WHEEL_RADIUS_METERS,
+            simulation.getSteerAbsoluteFacing()
+    );
   }
 
   /**
@@ -86,6 +66,9 @@ public class SwerveModuleSimulation
    */
   public SwerveModuleState getState()
   {
-    return state;
+    return new SwerveModuleState(
+            simulation.getDriveWheelFinalSpeedRadPerSec() * WHEEL_RADIUS_METERS,
+            simulation.getSteerAbsoluteFacing()
+    );
   }
 }
